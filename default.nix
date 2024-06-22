@@ -1,7 +1,7 @@
 { pkgs ? import <nixpkgs> {}, ... }:
 
 pkgs.stdenv.mkDerivation {
-	pname = "direnv";
+	pname = "diredit";
 	version = "1.0";
 	src = ./.;
 	nativeBuildInputs = with pkgs; [ autoreconfHook ];
