@@ -7,6 +7,12 @@
 #include <sys/param.h>
 #include <fcntl.h>
 
+void
+usage(FILE *f, const char *name)
+{
+    fprintf(f, "Usage: %s [DIR] [--show-hidden|--help]\n", name);
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -26,11 +32,34 @@ main(int argc, char *argv[])
     size_t linelen = 0;
     char *line = NULL;
     char *pathbuf = NULL;
+    int show_hidden = 0;
 
-    if (argc > 1 && chdir(argv[1]) == -1)
+    for (size_t i = 1; i < argc; i++)
     {
-        perror("chdir");
-        return 1;
+        if (strcmp(argv[i], "--show-hidden") == 0)
+        {
+            show_hidden = 1;
+            continue;
+        }
+
+        if (strcmp(argv[i], "--help") == 0)
+        {
+            usage(stdout, argv[0]);
+            return 0;
+        }
+
+        if (strlen(argv[i]) > 0 && argv[i][0] == '-')
+        {
+            usage(stderr, argv[0]);
+            fprintf(stderr, "error: invalid option %s\n", argv[i]);
+            return 1;
+        }
+
+        if (chdir(argv[i]) < 0)
+        {
+            perror("chdir");
+            return 1;
+        }
     }
 
     path = getcwd(NULL, MAXPATHLEN);
@@ -91,6 +120,11 @@ main(int argc, char *argv[])
         }
 
         if (strcmp(ent->d_name, "..") == 0)
+        {
+            continue;
+        }
+
+        if (!show_hidden && strlen(ent->d_name) > 0 && ent->d_name[0] == '.')
         {
             continue;
         }
