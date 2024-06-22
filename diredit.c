@@ -16,24 +16,8 @@ usage(FILE *f, const char *name)
 int
 main(int argc, char *argv[])
 {
-    char *path = NULL;
-    char *editor = NULL;
-    DIR *dir = NULL;
-    struct dirent *ent = NULL;
-    int fd;
-    char fname[] = "diredit-XXXXXX";
-    FILE *f = NULL;
-    char **oldlist = NULL;
-    char **newlist = NULL;
-    size_t oldcount = 0;
-    size_t newcount = 0;
-    pid_t pid = -1;
-    size_t linesz = 0;
-    size_t linelen = 0;
-    char *line = NULL;
-    char *pathbuf = NULL;
+    /* parse command line arguments */
     int show_hidden = 0;
-
     for (size_t i = 1; i < argc; i++)
     {
         if (strcmp(argv[i], "--show-hidden") == 0)
@@ -62,28 +46,30 @@ main(int argc, char *argv[])
         }
     }
 
-    path = getcwd(NULL, MAXPATHLEN);
+    char *path = getcwd(NULL, MAXPATHLEN);
     if (path == NULL)
     {
         perror("getcwd");
         return 1;
     }
 
-    dir = opendir(path);
+    DIR *dir = opendir(path);
     if (dir == NULL)
     {
         perror("opendir");
         return 1;
     }
 
-    fd = mkstemp(fname);
+    /* create temporary file */
+    char fname[] = "diredit-XXXXXX";
+    int fd = mkstemp(fname);
     if (fd == -1)
     {
         perror("mkstemp");
         return 1;
     }
 
-    f = fdopen(fd, "w");
+    FILE *f = fdopen(fd, "w");
     if (f == NULL)
     {
         perror("tmpfile");
@@ -92,11 +78,16 @@ main(int argc, char *argv[])
         return 1;
     }
 
-    editor = getenv("EDITOR");
+    char *editor = getenv("EDITOR");
     if (editor == NULL)
     {
         editor = strdup("nano");
     }
+
+    /* read directoy content */
+    struct dirent *ent;
+    char **oldlist = NULL;
+    size_t oldcount = 0;
 
     while ((ent = readdir(dir)))
     {
@@ -140,7 +131,8 @@ main(int argc, char *argv[])
     fclose(f);
     f = NULL;
 
-    pid = fork();
+    /* open editor */
+    pid_t pid = fork();
 
     if (pid < 0)
     {
@@ -182,9 +174,15 @@ main(int argc, char *argv[])
         return 1;
     }
 
+    /* read temporary file */
+    char **newlist = NULL;
+    size_t newcount = 0;
+    char *line = NULL;
+    size_t linesz = 0;
+
     while (getline(&line, &linesz, f) >= 0)
     {
-        linelen = strlen(line);
+        size_t linelen = strlen(line);
 
         if (line[linelen - 1] == '\n')
         {
@@ -210,6 +208,7 @@ main(int argc, char *argv[])
         return 1;
     }
 
+    /* rename files */
     for (size_t i = 0; i < oldcount; i++)
     {
         if (strcmp(oldlist[i], newlist[i]) == 0)
