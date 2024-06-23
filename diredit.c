@@ -13,6 +13,14 @@ usage(FILE *f, const char *name)
     fprintf(f, "Usage: %s [DIR] [--show-hidden|--help]\n", name);
 }
 
+char tmpname[] = ".diredit-XXXXXX";
+
+void
+cleanup(void)
+{
+    (void) unlink(tmpname);
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -61,20 +69,19 @@ main(int argc, char *argv[])
     }
 
     /* create temporary file */
-    char fname[] = "diredit-XXXXXX";
-    int fd = mkstemp(fname);
+    int fd = mkstemp(tmpname);
     if (fd == -1)
     {
         perror("mkstemp");
         return 1;
     }
 
+    atexit(cleanup);
+
     FILE *f = fdopen(fd, "w");
     if (f == NULL)
     {
         perror("tmpfile");
-        close(fd);
-        unlink(fname);
         return 1;
     }
 
@@ -88,19 +95,29 @@ main(int argc, char *argv[])
     struct dirent *ent;
     char **oldlist = NULL;
     size_t oldcount = 0;
+    size_t listcap = 16;
+
+    oldlist = malloc(sizeof (*oldlist) * listcap);
+    if (oldlist == NULL)
+    {
+        perror("malloc");
+        return 1;
+    }
 
     while ((ent = readdir(dir)))
     {
-        oldlist = realloc(oldlist, sizeof (*oldlist) * (oldcount + 1));
-        if (oldlist == NULL)
+        if (oldcount == listcap)
         {
-            perror("realloc");
-            fclose(f);
-            unlink(fname);
-            return 1;
+            listcap *= 2;
+            oldlist = realloc(oldlist, sizeof (*oldlist) * listcap);
+            if (oldlist == NULL)
+            {
+                perror("realloc");
+                return 1;
+            }
         }
 
-        if (strcmp(ent->d_name, fname) == 0)
+        if (strcmp(ent->d_name, tmpname) == 0)
         {
             continue;
         }
@@ -137,13 +154,12 @@ main(int argc, char *argv[])
     if (pid < 0)
     {
         perror("fork");
-        unlink(fname);
         return 1;
     }
 
     if (pid == 0)
     {
-        char *argv[] = { editor, fname, NULL };
+        char *argv[] = { editor, tmpname, NULL };
         if (execvp(editor, argv) < 0)
         {
             perror("execvp");
@@ -152,25 +168,26 @@ main(int argc, char *argv[])
     }
 
     int status;
-    wait(&status);
-
-    if (!WIFEXITED(status))
+    if (wait(&status) < 0)
     {
-        unlink(fname);
+        perror("wait");
         return 1;
     }
 
-    if (status != 0)
+    if (!WIFEXITED(status))
     {
-        unlink(fname);
-        return status;
+        return 1;
     }
 
-    f = fopen(fname, "r");
+    if (WEXITSTATUS(status) != 0)
+    {
+        return WEXITSTATUS(status);
+    }
+
+    f = fopen(tmpname, "r");
     if (f == NULL)
     {
         perror("fopen");
-        unlink(fname);
         return 1;
     }
 
@@ -180,18 +197,35 @@ main(int argc, char *argv[])
     char *line = NULL;
     size_t linesz = 0;
 
+    newlist = malloc(sizeof (*newlist) * oldcount);
+    if (newlist == NULL)
+    {
+        perror("malloc");
+        return 1;
+    }
+
     while (getline(&line, &linesz, f) >= 0)
     {
+        if (newcount == oldcount)
+        {
+            fprintf(stderr, "error: file count mismatch\n");
+            return 1;
+        }
+
         size_t linelen = strlen(line);
 
         if (line[linelen - 1] == '\n')
         {
-            line[linelen - 1] = '\0';
+            --linelen;
+            line[linelen] = '\0';
         }
 
-        newlist = realloc(newlist, sizeof (*newlist) * (newcount + 1));
+        if (linelen == 0)
+        {
+            continue;
+        }
 
-        if (strcmp(line, fname) == 0)
+        if (strcmp(line, tmpname) == 0)
         {
             continue;
         }
@@ -199,14 +233,13 @@ main(int argc, char *argv[])
         newlist[newcount++] = strdup(line);
     }
 
-    fclose(f);
-    unlink(fname);
-
-    if (oldcount != newcount)
+    if (oldcount > newcount)
     {
         fprintf(stderr, "error: file count mismatch\n");
         return 1;
     }
+
+    int ret = 0;
 
     /* rename files */
     for (size_t i = 0; i < oldcount; i++)
@@ -219,9 +252,9 @@ main(int argc, char *argv[])
         if (renameat(AT_FDCWD, oldlist[i], AT_FDCWD, newlist[i]) < 0)
         {
             perror("renameat");
-            return 1;
+            ret = 1;
         }
     }
 
-    return 0;
+    return ret;
 }
