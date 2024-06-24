@@ -26,7 +26,7 @@ main(int argc, char *argv[])
 {
     /* parse command line arguments */
     int show_hidden = 0;
-    for (size_t i = 1; i < argc; i++)
+    for (int i = 1; i < argc; i++)
     {
         if (strcmp(argv[i], "--show-hidden") == 0)
         {
