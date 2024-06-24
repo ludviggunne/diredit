@@ -81,7 +81,7 @@ main(int argc, char *argv[])
     FILE *f = fdopen(fd, "w");
     if (f == NULL)
     {
-        perror("tmpfile");
+        perror("fdopen");
         return 1;
     }
 
