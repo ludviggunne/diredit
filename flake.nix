@@ -13,7 +13,6 @@
         {
           devShells.default = pkgs.mkShell {
             nativeBuildInputs = with pkgs; [
-              autoreconfHook
               gdb
               indent
               clang-tools
@@ -24,9 +23,8 @@
             pname = "diredit";
             version = "1.0";
             src = ./.;
-            nativeBuildInputs = with pkgs; [ autoreconfHook ];
-            preConfigure = ''
-              autoreconf --install
+            installPhase = ''
+              PREFIX=$out make install
             '';
           };
         }
