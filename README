@@ -9,7 +9,5 @@ files, diredit will do nothing. The directory to edit is read from the command
 line arguments. If it's omitted, the current working directory is used.
 
 Install with
-> autoreconf --install
-> ./configure
 > make
 > make install
